@@ -1,16 +1,33 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { DRACOLoader } from './src/DRACOLoader.js'; // 引入 DRACOLoader
+
+// 创建白色的 PBR 材质
+function createWhitePBRMaterial() {
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xffffff, // 白色
+    roughness: 0.5,   // 粗糙度
+    metalness: 0.0    // 非金属
+  });
+
+  return material;
+}
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setClearColor(0x000000);
+renderer.setClearColor(0xffffff);
 renderer.setPixelRatio(window.devicePixelRatio);
+
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.5;
 
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.width = 2048;
+renderer.shadowMap.height = 2048;
 
 document.body.appendChild(renderer.domElement);
 
@@ -18,6 +35,8 @@ const scene = new THREE.Scene();
 
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
 camera.position.set(4, 5, 11);
+camera.near = 1;
+camera.far = 2000;
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -30,37 +49,64 @@ controls.autoRotate = false;
 controls.target = new THREE.Vector3(0, 1, 0);
 controls.update();
 
-const groundGeometry = new THREE.PlaneGeometry(20, 20, 32, 32);
-groundGeometry.rotateX(-Math.PI / 2);
-const groundMaterial = new THREE.MeshStandardMaterial({
-  color: 0x555555,
-  side: THREE.DoubleSide
-});
-const groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
-groundMesh.castShadow = false;
-groundMesh.receiveShadow = true;
-scene.add(groundMesh);
-
-const spotLight = new THREE.SpotLight(0xffffff, 3000, 100, 0.22, 1);
-spotLight.position.set(0, 25, 0);
+const spotLight = new THREE.SpotLight(0xffffff, 15000, 100, 10, 1);
+spotLight.position.set(0, 50, 0);
 spotLight.castShadow = true;
-spotLight.shadow.bias = -0.0001;
+spotLight.shadow.bias = -0.001;  // 适当增大偏移
+spotLight.shadow.normalBias = 0.0;  // 去除 normalBias
+spotLight.shadow.mapSize.width = 2048;
+spotLight.shadow.mapSize.height = 2048;
 scene.add(spotLight);
 
-const loader = new GLTFLoader().setPath('public/millennium_falcon/');
-loader.load('scene.gltf', (gltf) => {
-  console.log('loading model');
-  const mesh = gltf.scene;
+const ambientLight = new THREE.AmbientLight(0xffffff, 1);  // 环境光
+scene.add(ambientLight);
 
-  mesh.traverse((child) => {
+
+
+const blueDirectionalLight = new THREE.DirectionalLight(0x0000ff, 0.8);  // 蓝色光源，强度1
+blueDirectionalLight.position.set(100, 100, 100);  // 设置光源位置在画面右侧
+//blueDirectionalLight.target.position.set(0, 0, 0);  // 设置光源照射的目标
+blueDirectionalLight.castShadow = true;  // 启用阴影
+blueDirectionalLight.shadow.mapSize.width = 1024;  // 设置阴影分辨率
+blueDirectionalLight.shadow.mapSize.height = 1024;  // 设置阴影分辨率
+scene.add(blueDirectionalLight);
+scene.add(blueDirectionalLight.target);  // 添加目标物体
+
+
+const dracoLoader = new DRACOLoader();
+dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
+
+const loader = new GLTFLoader();
+loader.setDRACOLoader(dracoLoader);
+
+let mixer;
+
+loader.load('public/millennium_falcon/model.glb', (gltf) => {
+  const mdoel = gltf.scene;
+  // 创建白色 PBR 材质
+  const whitePBRMaterial = createWhitePBRMaterial();
+
+  // 遍历模型中的每个子物体
+  model.traverse((child) => {
     if (child.isMesh) {
+      // 如果物体没有材质，给它赋予白色 PBR 材质
+      if (child.material.length === 0 || !child.material) {
+        child.material = whitePBRMaterial;
+      }
+
+      // 设置阴影
       child.castShadow = true;
       child.receiveShadow = true;
     }
   });
 
-  mesh.position.set(0, 1.05, -1);
-  scene.add(mesh);
+  model.position.set(0, 1.5, 0);
+  scene.add(model);
+
+  mixer = new THREE.AnimationMixer(model);
+  gltf.animations.forEach((clip) => {
+    mixer.clipAction(clip).play();
+  });
 
   document.getElementById('progress-container').style.display = 'none';
 }, (xhr) => {
@@ -77,6 +123,8 @@ window.addEventListener('resize', () => {
 
 function animate() {
   requestAnimationFrame(animate);
+
+  if (mixer) mixer.update(0.01);
   controls.update();
   renderer.render(scene, camera);
 }
