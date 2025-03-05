@@ -82,7 +82,7 @@ loader.setDRACOLoader(dracoLoader);
 let mixer;
 
 loader.load('public/millennium_falcon/model.glb', (gltf) => {
-  const mdoel = gltf.scene;
+  const model = gltf.scene;
   // 创建白色 PBR 材质
   const whitePBRMaterial = createWhitePBRMaterial();
 
