@@ -83,7 +83,7 @@ let mixer;
 
 loader.load('public/millennium_falcon/model.glb', (gltf) => {
   const model = gltf.scene;
-  // 创建白色 PBR 材质
+  // 创建白色 PBR 材质.
   const whitePBRMaterial = createWhitePBRMaterial();
 
   // 遍历模型中的每个子物体
